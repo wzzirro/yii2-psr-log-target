@@ -6,6 +6,7 @@ use Psr\Log\LoggerAwareTrait;
 use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
 use yii\base\InvalidConfigException;
+use yii\helpers\ArrayHelper;
 use yii\helpers\VarDumper;
 use yii\log\Logger;
 use yii\log\Target;
@@ -29,6 +30,11 @@ class PsrTarget extends Target implements LoggerAwareInterface
      * @var bool If enabled, exception's trace will extract into `trace` property
      */
     public $extractExceptionTrace = false;
+
+    /**
+     * @var bool If enabled, vars will be placed in to first message in field 'extra'.
+     */
+    public $extractVars = false;
 
     private $_levelMap = [
         Logger::LEVEL_ERROR => LogLevel::ERROR,
@@ -55,9 +61,17 @@ class PsrTarget extends Target implements LoggerAwareInterface
      */
     private $_levels = [];
 
+    /**
+     * @var array fixes sending vars as second message
+     */
+    private $_logVars = [];
+
     public function __construct($config = [])
     {
         $this->_levels = $this->_levelMap;
+        $this->_logVars = $this->logVars;
+
+        $this->logVars = [];
         parent::__construct($config);
     }
 
@@ -109,6 +123,10 @@ class PsrTarget extends Target implements LoggerAwareInterface
                     } else {
                         $text = (string)$text;
                     }
+
+                    if ($this->extractVars) {
+                        $context['vars'] = $this->getVars();
+                    }
                 } elseif ($text instanceof PsrMessage) {
                     $context = array_merge($text->getContext(), $context); // Will not replace standard context keys
                     $text = $text->getMessage();
@@ -119,6 +137,18 @@ class PsrTarget extends Target implements LoggerAwareInterface
 
             $this->getLogger()->log($this->_levelMap[$level], $text, $context);
         }
+    }
+
+    protected function getVars()
+    {
+        $result = [];
+
+        $context = ArrayHelper::filter($GLOBALS, $this->_logVars);
+        foreach ($context as $key => $value) {
+            $result[$key] = $value;
+        }
+
+        return $result;
     }
 
     public static function filterMessages($messages, $levels = [], $categories = [], $except = [])
